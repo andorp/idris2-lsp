@@ -176,7 +176,11 @@ loadURI conf uri version = do
   let caps = (publishDiagnostics <=< textDocument) . capabilities $ conf
   update LSPConf (record { quickfixes = [], cachedActions = empty, cachedHovers = empty })
   traverse_ (findQuickfix caps uri) errs
-  sendDiagnostics caps uri version errs
+  warns <- map warnings (get Ctxt)
+  case warns of
+    [] => pure ()
+    (_::_) => update LSPConf (record { warningFiles $= insert uri })
+  sendDiagnostics caps uri version errs warns
   pure $ Right ()
 
 loadIfNeeded : Ref LSPConf LSPConfiguration
@@ -456,6 +460,7 @@ handleNotification TextDocumentDidSave params = whenActiveNotification $ \conf =
   update LSPConf (record
     { dirtyFiles $= delete params.textDocument.uri
     , errorFiles $= delete params.textDocument.uri
+    , warningFiles $= delete params.textDocument.uri
     , semanticTokensSentFiles $= delete params.textDocument.uri
     })
   ignore $ loadURI conf params.textDocument.uri Nothing
@@ -476,6 +481,7 @@ handleNotification TextDocumentDidClose params = whenActiveNotification $ \conf 
                          , cachedHovers = empty
                          , dirtyFiles $= delete params.textDocument.uri
                          , errorFiles $= delete params.textDocument.uri
+                         , warningFiles $= delete params.textDocument.uri
                          , semanticTokensSentFiles $= delete params.textDocument.uri
                          })
   logI Server $ "File \{show params.textDocument.uri} closed"

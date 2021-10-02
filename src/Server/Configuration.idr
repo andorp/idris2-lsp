@@ -41,6 +41,8 @@ record LSPConfiguration where
   dirtyFiles : SortedSet DocumentURI
   ||| Files with errors
   errorFiles : SortedSet DocumentURI
+  ||| Files with warnings
+  warningFiles : SortedSet DocumentURI
   ||| Semantic tokens have been sent
   semanticTokensSentFiles : SortedSet DocumentURI
   ||| Limit for multiple search results
@@ -67,6 +69,7 @@ defaultConfig =
     , openFile          = Nothing
     , dirtyFiles        = empty
     , errorFiles        = empty
+    , warningFiles      = empty
     , semanticTokensSentFiles = empty
     , searchLimit       = 5
     , quickfixes        = []

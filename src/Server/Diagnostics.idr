@@ -24,8 +24,8 @@ import System.Path
 keyword : Doc IdrisAnn -> Doc IdrisAnn
 keyword = annotate $ Syntax Keyword
 
-buildDiagnostic : Maybe FC -> Doc IdrisAnn -> Maybe (List DiagnosticRelatedInformation) -> Diagnostic
-buildDiagnostic loc error related =
+buildErrorDiagnostic : Maybe FC -> Doc IdrisAnn -> Maybe (List DiagnosticRelatedInformation) -> Diagnostic
+buildErrorDiagnostic loc error related =
   MkDiagnostic
     { range = cast $ fromMaybe replFC loc
     , severity = Just Error
@@ -33,6 +33,20 @@ buildDiagnostic loc error related =
     , codeDescription = Nothing
     , source = Just "idris2"
     , message = renderString $ unAnnotateS $ layoutUnbounded error
+    , tags = Nothing
+    , relatedInformation = related
+    , data_ = Nothing
+    }
+
+buildWarningDiagnostic : Maybe FC -> Doc IdrisAnn -> Maybe (List DiagnosticRelatedInformation) -> Diagnostic
+buildWarningDiagnostic loc warning related =
+  MkDiagnostic
+    { range = cast $ fromMaybe replFC loc
+    , severity = Just Warning
+    , code = Nothing
+    , codeDescription = Nothing
+    , source = Just "idris2"
+    , message = renderString $ unAnnotateS $ layoutUnbounded warning
     , tags = Nothing
     , relatedInformation = related
     , data_ = Nothing
@@ -440,5 +454,26 @@ toDiagnostic caps uri err = do
          ((\case PhysicalIdrSrc ident => Just ident; _ => Nothing) . fst <=< isNonEmptyFC =<< loc)
   if uri.path == p
      then do let related = (flip toMaybe (getRelatedErrors uri err) <=< relatedInformation) =<< caps
-             pure $ buildDiagnostic loc error related
-     else pure $ buildDiagnostic (toStart <$> loc) ("In" <++> pretty p <+> colon <++> error) Nothing
+             pure $ buildErrorDiagnostic loc error related
+     else pure $ buildErrorDiagnostic (toStart <$> loc) ("In" <++> pretty p <+> colon <++> error) Nothing
+
+export
+warningsToDiagnostic
+  :  Ref Ctxt Defs
+  => Ref Syn SyntaxInfo
+  => Ref ROpts REPLOpts
+  => (caps : Maybe PublishDiagnosticsClientCapabilities)
+  -> (uri : URI)
+  -> (warning : Warning)
+  -> Core Diagnostic
+warningsToDiagnostic caps uri warn = do
+  defs <- get Ctxt
+  warning <- pwarning warn
+  let loc = getWarningLoc warn
+  let wdir = defs.options.dirs.working_dir
+  p <- maybe (pure uri.path) (pure . (wdir </>) <=< nsToSource replFC)
+         ((\case PhysicalIdrSrc ident => Just ident; _ => Nothing) . fst <=< isNonEmptyFC =<< loc)
+  if uri.path == p
+     then do -- let related = (flip toMaybe (getRelatedErrors uri err) <=< relatedInformation) =<< caps
+             pure $ buildWarningDiagnostic loc warning Nothing -- related
+     else pure $ buildWarningDiagnostic (toStart <$> loc) ("In" <++> pretty p <+> colon <++> warning) Nothing
